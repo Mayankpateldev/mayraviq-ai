@@ -852,7 +852,7 @@ export default function CanvasEditor({
   };
   return (
     <section
-      className={`visual-canvas sketch-workspace ${expanded ? "canvas-expanded" : ""} ${node ? "has-properties" : ""}`}
+      className={`visual-canvas sketch-workspace ${expanded ? "canvas-expanded" : ""} ${node && tool === "select" ? "has-properties" : ""}`}
       onKeyDown={shortcuts}
       tabIndex={-1}
     >
@@ -1510,7 +1510,7 @@ export default function CanvasEditor({
                   >
                     <DesignNode
                       node={{ ...n, locked: isLocked(board.nodes, n) }}
-                      selected={selection.includes(n.id)}
+                      selected={tool === "select" && selection.includes(n.id)}
                       connecting={from === n.id}
                       onResize={(e) => {
                         e.preventDefault();
