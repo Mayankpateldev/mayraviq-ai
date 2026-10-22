@@ -844,14 +844,16 @@ test("Automatic meeting notes require consent and scope, deduplicate clips and p
     };
     await req("/api/meeting", { ...clip, id: randomUUID() }, "owner", 403);
     assert.equal(
-      (
-        await db
-          .prepare(
-            "SELECT count(*) AS count FROM meeting_transcripts WHERE session_id=?",
-          )
-          .bind(session)
-          .first()
-      ).count,
+      Number(
+        (
+          await db
+            .prepare(
+              "SELECT count(*) AS count FROM meeting_transcripts WHERE session_id=?",
+            )
+            .bind(session)
+            .first()
+        ).count,
+      ),
       2,
     );
   } finally {
@@ -994,12 +996,14 @@ test("Person-specific meeting invitations restrict recipients and track email pr
     assert.equal(email.delivery, "preview");
     await req("/api/invitations", payload);
     assert.equal(
-      (
-        await db
-          .prepare("SELECT count(*) AS count FROM room_invites WHERE id=?")
-          .bind(nonce)
-          .first()
-      ).count,
+      Number(
+        (
+          await db
+            .prepare("SELECT count(*) AS count FROM room_invites WHERE id=?")
+            .bind(nonce)
+            .first()
+        ).count,
+      ),
       1,
     );
     const mail = await req("/api/invitations?previewId=" + nonce);
