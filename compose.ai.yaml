@@ -1,0 +1,14 @@
+# Optional private model service. Combine with compose.yaml; no public model port.
+services:
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: "1"
+    volumes: [ollama-models:/root/.ollama]
+    networks: [app]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+volumes:
+  ollama-models:

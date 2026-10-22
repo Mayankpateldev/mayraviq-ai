@@ -1,0 +1,12 @@
+# Local PostgreSQL only; run React and Node separately using their dev scripts.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mayraviq
+      POSTGRES_USER: mayraviq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local POSTGRES_PASSWORD}
+    ports: [127.0.0.1:5432:5432]
+    volumes: [dev-postgres:/var/lib/postgresql/data]
+volumes:
+  dev-postgres:

@@ -1,0 +1,28 @@
+map $uri $cache_policy {
+  default "no-store";
+  ~^/assets/ "public, max-age=31536000, immutable";
+}
+server {
+  listen 8080;
+  server_tokens off;
+  root /usr/share/nginx/html;
+  index index.html;
+  client_max_body_size 256k;
+  add_header Cache-Control $cache_policy always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy no-referrer always;
+  add_header X-Frame-Options DENY always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+  location = /health { access_log off; return 200 'ok'; }
+  location /api/ {
+    proxy_pass http://${API_UPSTREAM};
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Workspace-Id $http_x_workspace_id;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 60s;
+  }
+  location = /runtime-config.js { try_files $uri =404; }
+  location /assets/ { try_files $uri =404; }
+  location / { try_files $uri /index.html; }
+}

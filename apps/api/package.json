@@ -1,0 +1,25 @@
+{
+  "name": "@mayraviq/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx src/server.ts",
+    "build": "tsc --noEmit && esbuild src/server.ts src/platform/migrate.ts src/platform/import-legacy.ts --bundle --platform=node --target=node24 --format=esm --packages=external --outdir=dist --alias:@mayraviq/contracts/canvas-design=../../packages/contracts/src/canvas-design.ts --alias:@mayraviq/contracts/canvas-schema=../../packages/contracts/src/canvas-schema.ts --alias:@mayraviq/contracts/ai=../../packages/contracts/src/ai.ts --alias:@mayraviq/contracts/canvas-merge=../../packages/contracts/src/canvas-merge.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx src/platform/migrate.ts",
+    "db:import-legacy": "node --env-file-if-exists=.env --import tsx src/platform/import-legacy.ts"
+  },
+  "dependencies": {
+    "@mayraviq/contracts": "*",
+    "jose": "^6.1.0",
+    "nodemailer": "^10.1.0",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.15.5",
+    "esbuild": "^0.25.12"
+  }
+}

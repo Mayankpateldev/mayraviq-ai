@@ -1,0 +1,47 @@
+# Security review and threat model
+
+Scope: the restructured React frontend, Node API, PostgreSQL persistence, room invitations and LiveKit grant flow. Intended use: an internal team tool containing private business data, confirmed by the owner. Assume team members can accidentally or intentionally request another workspace's IDs; guest clients and forwarded links are untrusted. Host administrators and the configured identity/media providers are trusted infrastructure operators. This is a repository-grounded review, not a penetration-test certification.
+
+## Assets and boundaries
+
+Protect private discussions, notes, designs, decisions, membership, audit history, invitation credentials and media access. Trust boundaries are browser → API, API → identity provider, API → PostgreSQL, browser/API → LiveKit and administrative migration/deployment access. Public browser runtime configuration must never contain database or media secrets.
+
+| Abuse path                                         | Implemented controls                                                                                                                              | Residual work                                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Spoof caller with identity headers or forged token | API ignores identity headers; verifies signature, issuer, audience, expiry and optional required group; production rejects development auth       | Configure a team-restricted provider and test real JWT claims and unauthorized accounts                             |
+| Enumerate another workspace/session                | Verified subject plus workspace membership/owner checks and independent room guest access                                                         | Keep isolation regression tests on every new endpoint                                                               |
+| Room guest obtains project/business data           | Session-only guest membership; separate room canvas; no guest workspace or invite-management grant                                                | Define guest offboarding/retention policy                                                                           |
+| Forwarded/expired invitation abuse                 | Random room codes stored as SHA256 hashes; 24-hour expiry; revoked links cannot be redeemed                                                       | Existing redeemed membership is not revoked by link revocation; add explicit guest removal and SFU reconciliation   |
+| Stale edit overwrites another participant          | Optimistic versions, 409 conflicts and SERIALIZABLE multi-write transactions                                                                      | Real PostgreSQL concurrent checks run in CI; embedded local checks do not reproduce concurrent network transactions |
+| SQL injection or inconsistent partial writes       | Parameterized values, bounded validation, foreign keys/constraints and rollback                                                                   | Keep SQL identifiers static; review future import/migration extensions                                              |
+| Cross-origin mutation / payload exhaustion         | Exact configured Origin, bearer authentication, JSON-only mutations, streamed 256 KiB cap, authenticated database limits and HTTP timeouts        | Edge/IP controls for unauthenticated traffic; aggregate conversation pagination                                     |
+| XSS steals private data                            | React text rendering, validated canvas style fields, CSP, no stored bearer token in localStorage                                                  | CSP connect hosts need narrowing after service hosts are chosen; browser XSS can still access in-memory tokens      |
+| Leaked source/image credentials                    | Separate public/runtime config, server-only keys, ignored env/data files, Docker context exclusions and non-root API                              | Platform secret store, rotation, image scans, restricted operator access                                            |
+| Media remains after guest loses access             | New token checks membership/expiry and ended-room status; short-lived room-only grants; cooperating clients disconnect when access polling denies | Active SFU connections require server-side removal; real two-person call/revocation testing pending                 |
+| Private data lost or retained too long             | Atomic writes, nondestructive importer, no private state in exported source                                                                       | Encrypted backup/PITR, restore drills, content retention and permanent deletion workflow                            |
+
+## Release prerequisites for private business data
+
+Configure team OIDC, HTTPS ingress and restricted network access; verify actual identity and group claims. Provision PostgreSQL backups and restore testing. Configure media and immediate participant revocation if guest calling is required. Review retention and soft-delete semantics with the owner. Run CI against real PostgreSQL and both container images, then stage the deployment with separate accounts before production migration.
+
+Automated notes, recording, transcription and external actions need an explicit consent and approval model before implementation. Current action proposals are drafts reviewed within the workspace, and no external messages or actions are sent automatically.
+
+The API still aggregates histories across accessible conversations and does not provide a full administrative membership-removal workflow. A revoked invitation prevents future redemption; it does not remove someone who already joined. No production deployment, identity integration, backup job or SFU reconciliation has been completed by this restructure.
+
+## AI assistance boundary
+
+The optional room assistant introduces API-to-model trust. It is disabled by default and only workspace members in open rooms may request it. Room content is truncated, has no model tools, and is marked untrusted evidence. Strict output validation, a 45-second timeout, a 64 KiB response limit, four requests per minute per user and two concurrent requests per API process limit exposure. Context and generated text are not logged or persisted automatically; only request metadata is audited. Model output remains untrusted and can be misleading. The self-hosted container disables cloud features; operators must verify model-host privacy and network egress. No hosted-provider adapter is currently enabled.
+
+Local calling uses a trusted development-runtime exception for `ws://` on exact loopback hostnames only. The production server enables no exception; development identity also requires loopback binding and is rejected in production. Local media credentials are random, owner-readable files in ignored `apps/api/.data`, excluded from images and exports.
+
+New room guest grants record their source invitation. Revoking that invitation removes its derived guest grants transactionally; subsequent room reads/writes and call-token requests are denied. Guest call grants cannot outlive their guest expiry. Legacy imported guest grants have no source mapping and retain their original expiry until re-invited; expire or reconcile them before external deployment. Normal clients disconnect on a revoked-room response, but immediate removal of a malicious existing SFU connection still requires media-server reconciliation.
+
+The local web development server restricts file serving to browser code, browser-safe contracts and dependencies, restricts CORS to the preview origin, and denies raw access to database/storage directories, legacy data, environment files, private keys, encrypted snapshots and database files. This supplements loopback binding; production serves only compiled web assets. The local data directory is owner-only. See [Vite file-serving controls](https://vite.dev/config/server-options#server-fs-deny).
+
+## Local speech notes
+
+Opted-in speech is transiently decoded by a loopback worker authenticated with a random service token. The API validates per-clip acknowledgement, room access and workspace transcription settings; scopes transcript reads and recap generation, binds contributor labels to identity, and deduplicates clip retries. Stored transcripts/recaps are private data. See [meeting notes](MEETING_NOTES.md) for retention, capacity and device-validation limits.
+
+## Person-specific invitations
+
+Account-ID invitations are workspace-scoped. Email-targeted invitations additionally require a verified matching identity-provider email; forwarding a targeted link does not change its recipient. Declined/revoked grants are denied by room access checks. Email previews are encrypted with an invitation-bound AES-GCM envelope and readable only by their authenticated sender while room membership remains. SMTP settings and message composition remain server-side. See [invitations](INVITATIONS.md) for operational limitations.

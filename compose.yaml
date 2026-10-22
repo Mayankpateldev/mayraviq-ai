@@ -1,0 +1,83 @@
+name: mayraviq
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mayraviq
+      POSTGRES_USER: mayraviq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U mayraviq -d mayraviq"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+    command: [node, dist/platform/migrate.js]
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [data]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      PORT: 4000
+      DEV_AUTH: "false"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      APP_ORIGIN: ${APP_ORIGIN:?Set HTTPS APP_ORIGIN}
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set OIDC_ISSUER}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set OIDC_AUDIENCE}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:?Set OIDC_JWKS_URL}
+      OIDC_REQUIRED_GROUP: ${OIDC_REQUIRED_GROUP:-}
+      OIDC_GROUP_CLAIM: ${OIDC_GROUP_CLAIM:-groups}
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_ENDPOINT: ${AI_ENDPOINT:-http://ollama:11434}
+      AI_MODEL: ${AI_MODEL:-llama3.2:3b}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [app, data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    environment:
+      API_UPSTREAM: api:4000
+      PUBLIC_OIDC_AUTHORITY: ${OIDC_ISSUER:?Set OIDC_ISSUER}
+      PUBLIC_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID}
+      PUBLIC_OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email}
+    ports: [127.0.0.1:8080:8080]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [app]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  postgres-data:
+networks:
+  app:
+  data:
+    internal: true
